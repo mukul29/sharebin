@@ -12,6 +12,7 @@ import HttpError from "./models/http-error";
 
 import pastesRoutes from "./routes/pastes-routes";
 import usersRoutes from "./routes/users-routes";
+import multer, { Multer } from "multer";
 
 // initialize express app
 const app = express();
@@ -47,7 +48,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // we reach this middleware when an error occurs
-app.use((error: HttpError, req: Request, res: Response, next: NextFunction) => {
+app.use((err: Error | HttpError | multer.MulterError, req: Request, res: Response, next: NextFunction) => {
     // Delete any file which may have been added (for rolling back)
     if (req.file) {
         fs.unlink(req.file.path, (err) => {
@@ -58,12 +59,20 @@ app.use((error: HttpError, req: Request, res: Response, next: NextFunction) => {
 
     // following check prevents sending multiple responses 
     if (res.headersSent) {
-        return next(error);
+        return next(err);
+    }
+
+    if (err instanceof multer.MulterError) {
+        return res.status(422).json({ message: "File upload error" });
     }
 
     // set error code and finally return the response
-    res.status(error.code || 500);
-    res.json({ message: error.message || "Something went wrong." });
+    if ('code' in err) {
+        res.status(err.code);
+    } else {
+        res.status(500);
+    }
+    res.json({ message: err.message || "Something went wrong." });
 });
 
 app.listen(PORT, () => {
